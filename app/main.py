@@ -1,6 +1,8 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
+import logging
+import os
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -8,6 +10,9 @@ FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
 
 
 app = FastAPI()
+
+logger_name = os.getenv("APP_LOGGER", __name__)
+logger = logging.getLogger(logger_name)
 
 
 @app.websocket("/ws")
@@ -17,24 +22,20 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             try:
                 data = await websocket.receive_text()
-                print (f"Received message: {data}")
+                logger.debug("Received message: %s", data)
             except WebSocketDisconnect:
-                # client disconnected gracefully
+                logger.info("WebSocket client disconnected")
                 break
             await websocket.send_text(f"Message text was: {data}")
     except Exception:
-        import traceback
-
-        traceback.print_exc()
+        logger.exception("Unhandled exception in websocket handler")
     finally:
         try:
             await websocket.close()
         except Exception:
-            pass
+            logger.debug("Error while closing websocket", exc_info=True)
 
 
-# Mount SPA static files after registering websocket routes so websocket scopes are
-# handled by the websocket route instead of being intercepted by StaticFiles.
 app.mount(
     "/",
     StaticFiles(directory=str(FRONTEND_DIST), html=True),
